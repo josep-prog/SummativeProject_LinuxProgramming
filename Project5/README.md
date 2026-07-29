@@ -1,3 +1,12 @@
+# 
+
+| Name | Link |
+| :---- | :---- |
+| **DemoVideo** | **[Project 5: Building a Concurrent TCP Client–Server Monitoring System](https://youtu.be/ONAP47ju_uE)**  |
+|  |  |
+
+# 
+
 # **Project 5: Building a Concurrent TCP Client–Server Monitoring System**
 
 ## **Explanation, Design, Implementation, and Execution Guide**
@@ -81,25 +90,6 @@ Client                Server
 The client first creates a connection with the server.
 
 After the connection is established, both sides can exchange messages.
-
-# **2b. Communication Protocol: Length-Prefixed Message Framing**
-
-The rest of this document describes TCP conceptually; this section documents the actual wire protocol used by `server.c`/`client.c`, since it directly matters for correctness.
-
-TCP is a **byte stream**, not a message stream. A single `send()` call is not guaranteed to arrive as a single `recv()` on the other end, in either direction:
-
-* Two messages sent back-to-back by the server (e.g. the login result and the equipment list) can be **coalesced** into one `recv()` on the client.
-* A single message can just as easily be **split** across multiple `recv()` calls.
-
-Both of these were reproduced in practice while testing this implementation: an early version sent "LOGIN SUCCESS" and the equipment list as two separate `send()` calls, matched by two separate `recv()` calls on the client — the client's second `recv()` blocked forever because both messages had already arrived together in the first one. Combining them into a single `send()` fixed that case but exposed the opposite problem: a `recv()` intended for the reservation response instead picked up the unread tail of a message that had arrived split across reads, silently swallowing the real reservation result.
-
-The fix is a small length-prefixed framing scheme, implemented identically in both `server.c` and `client.c`:
-
-* `send_all(sock, buf, len)` / `recv_all(sock, buf, len)` loop until exactly `len` bytes have been transferred, instead of trusting a single `send()`/`recv()` call to move the whole buffer.
-* `send_msg(sock, msg)` sends a 4-byte length prefix (`htonl`-encoded) followed by the message bytes.
-* `recv_msg(sock, buf, buf_size)` reads the 4-byte length prefix first, then reads exactly that many payload bytes (looping via `recv_all`), and null-terminates the result.
-
-Every free-text exchange (login result + equipment list, reservation response, rejection messages) goes through `send_msg`/`recv_msg`. The two fixed-size integer exchanges (user ID, equipment choice) go through `send_all`/`recv_all` directly. This guarantees each logical message is read exactly once, completely, regardless of how the TCP stack happens to chunk it — verified by running the server and multiple clients end-to-end (successful reservation, a rejected duplicate reservation, an out-of-range choice, and an unauthenticated user) with no hangs and the reservation confirmation correctly received every time.
 
 # **3\. Server Responsibilities**
 
@@ -335,20 +325,29 @@ Camera     : Available
 
 Because multiple threads access this data, it must be protected.
 
-# **12\. Handling Client Disconnection and Socket Errors**
+# **12\. Handling Client Disconnection**
 
-Clients may disconnect unexpectedly, and any socket call can fail. The actual implementation checks every socket-facing call:
+Clients may disconnect unexpectedly.
 
-* **Startup (`main()`)**: `socket()`, `bind()`, and `listen()` are all checked for a negative return; a failure prints the error via `perror()` and exits with a non-zero status rather than continuing with a broken socket.
-* **Accept loop**: a failed `accept()` (negative return) is logged and the loop simply `continue`s — one bad `accept()` no longer takes down the whole server. A failed `malloc()` for the per-client file descriptor, or a failed `pthread_create()`, is handled the same way: the connection is dropped (socket closed) and the server keeps accepting new clients.
-* **Per-client thread (`client_handler()`)**: `recv_all()` returning `<= 0` (via `recv()` returning `0` on a clean disconnect or `-1` on error) is checked at both points a client can disconnect — before sending a user ID, and after login but before choosing equipment. In the second case, the earlier version of this code left `choice` **uninitialized** and used it anyway if the client vanished at exactly that moment; this is now caught before `choice` is ever touched.
-* **Every `send()`/`send_msg()`/`send_all()`** on the server and client is checked for failure and reported via `perror()` rather than being ignored.
+**Example:**
 
-On disconnect (or after handling the client fully): if the user had been added to the connected-users table (see §12b), they are removed from it, the dashboard is reprinted, and the socket is closed. The server process itself never crashes because of a single client's bad behaviour or disconnection.
+Client closes suddenly
 
-# **12b. Server Status Dashboard**
+The server should not crash.
 
-The server maintains a `connected_users[MAX_CLIENTS]` table (slot value `-1` = empty) protected by the same mutex as the equipment array. `print_status()` locks the mutex, prints the list of currently connected user IDs and the Available/Reserved status of all four equipment items, then unlocks. It is called after: a successful login (user added), a reservation attempt (success or rejection), and a disconnect (user removed) — so the dashboard is always reprinted immediately after any event that changes either piece of shared state, satisfying the "maintain and display currently connected users / equipment reservation status" requirement.
+The server checks communication results.
+
+**If:**
+
+recv() returns 0
+
+The server knows the client disconnected.
+
+Then:
+
+1. Close socket.  
+2. Remove user from connected list.  
+3. End client thread.
 
 # **13\. Client Application**
 

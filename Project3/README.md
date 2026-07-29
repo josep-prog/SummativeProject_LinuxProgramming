@@ -1,140 +1,466 @@
-# Project 3: `sensor_analysis` — Python C Extension for High-Performance Data Processing
+# 
 
-## Overview
+| Name | Link |
+| :---- | :---- |
+| **DemoVideo** | **[Project 3 \[5pts\]: Developing a Python C Extension for High-Performance Data Processing](https://youtu.be/F7JdMwu5rWk)**  |
+|  |  |
 
-`sensor_analysis` is a native Python C extension module that performs common
-statistical operations over a collection of floating-point sensor readings
-(soil moisture, temperature, humidity, etc.) directly in C, so a Python
-caller processing thousands of readings avoids the overhead of a pure-Python
-loop.
+# 
 
-## Files
+# **Project 3: Developing a Python C Extension for High-Performance Data Processing**
 
-| File | Purpose |
-|---|---|
-| `sensor_analysis.c` | C extension source (Python C API implementation) |
-| `setup.py` | Build configuration (setuptools) |
-| `test.py` | Test/demo script exercising every function |
+## **Explanation, Design, Implementation, and Execution Guide**
 
-## Compilation
+## **Introduction**
 
-Build the extension in-place with:
+Modern applications such as smart agriculture monitoring systems collect large amounts of data from sensors. These sensors may continuously measure environmental conditions such as soil moisture, temperature, humidity, and other important factors. When the amount of data becomes large, processing everything directly in Python can become slower because Python is an interpreted language.
 
-```bash
-python3 setup.py build_ext --inplace
-```
+To improve performance, this project develops a native C extension module that can be imported and used directly from Python. The purpose of the extension is to move computationally intensive numerical operations from Python into C, where calculations can be performed faster.
 
-This compiles `sensor_analysis.c` against the Python headers and produces a
-shared object (e.g. `sensor_analysis.cpython-3xx-x86_64-linux-gnu.so`) in the
-current directory, importable directly by Python.
+The extension module is called:
 
-## Execution
+sensor\_analysis
 
-```bash
-python3 test.py
-```
+The module receives sensor readings from Python as lists or tuples, processes the values inside C using the Python C API, and returns results back to Python as normal Python objects.
 
-### Expected output
+The implemented functions are:
 
-Using the sample dataset in `test.py`, `data = [25.5, 30.2, 28.9, 35.1, 22.8]`:
+* average(data) – calculates the arithmetic mean of sensor readings.  
+* range\_value(data) – calculates the difference between maximum and minimum values.  
+* variance(data) – calculates the sample variance.  
+* count\_above(data, limit) – counts values greater than a given limit.  
+* statistics(data) – returns a summary dictionary containing important statistics.
 
-```
-Average: 28.5
-Range: 12.3
-Variance: 22.025000000000002
-Above 30: 2
-Statistics:
-{'samples': 5, 'average': 28.5, 'minimum': 22.8, 'maximum': 35.1}
-Error: Dataset cannot be empty
-```
+# **1\. Project Structure**
 
-(`Variance` prints with trailing floating-point noise — 22.025 is not exactly
-representable in IEEE 754 double precision — this is expected, not a bug.)
+The project contains three main files:
 
-The final line comes from the script's boundary-condition test, which calls
-`sensor_analysis.average([])` inside a `try/except` and prints the
-`ValueError` raised by the module.
+sensor\_project/
 
-## Required Functions
+│── sensor\_analysis.c  
+│── setup.py  
+│── test.py
 
-### `average(data)`
-Formula: `sum(x) / n`. Time complexity: O(n).
+Each file has a specific purpose:
 
-### `range_value(data)`
-Formula: `max(x) - min(x)`. Time complexity: O(n) (single pass tracking a
-running min/max).
+### **sensor\_analysis.c**
 
-### `variance(data)`
-Sample variance: `sum((x - mean)^2) / (n - 1)`. Time complexity: O(n), but
-makes **two passes** over the data (one to compute the mean, one to
-accumulate squared deviations from it), since the mean is required before
-any deviation can be calculated. Requires at least 2 samples (raises
-`ValueError` otherwise, since sample variance is undefined for n < 2).
+This is the main C extension source file. It contains:
 
-### `count_above(data, limit)`
-Counts values strictly greater than `limit`. Time complexity: O(n).
+* C implementations of statistical functions.  
+* Python C API integration.  
+* Python method definitions.  
+* Module initialization code.
 
-### `statistics(data)`
-Returns a dict: `{"samples": n, "average": ..., "minimum": ..., "maximum": ...}`.
-Time complexity: O(n).
+### **setup.py**
 
-## Input Validation
+This file contains the build configuration required to compile the C code into a Python extension module.
 
-`get_data()` rejects any argument that isn't a `list` or `tuple`
-(`TypeError`) and rejects an empty sequence (`ValueError`) before any
-numeric work begins.
+### **test.py**
 
-Beyond container-level validation, every individual element is converted
-through a shared helper, `as_double()`:
+This Python script tests the extension by:
 
-```c
-static int as_double(PyObject *item, double *out)
-{
-    double value = PyFloat_AsDouble(item);
-    if (value == -1.0 && PyErr_Occurred())
-        return 0;
-    *out = value;
-    return 1;
+* Importing the module.  
+* Creating sample sensor data.  
+* Calling every function.  
+* Testing invalid input handling.
+
+# 
+
+# **2\. Using the Python C API**
+
+The extension uses the Python C API to allow communication between Python and C.
+
+Normally, Python works with Python objects:
+
+Example:
+
+data \= \[20.5, 25.7, 30.1\]
+
+However, C works with normal C data types:
+
+double value;
+
+The Python C API provides functions that allow conversion between the two environments.
+
+For example:
+
+PySequence\_GetItem()
+
+is used to access values from Python lists and tuples.
+
+The value is then converted into a C double:
+
+PyFloat\_AsDouble()
+
+This allows all mathematical operations to happen directly in C.
+
+The general process is:
+
+Python List  
+      |  
+      v  
+Python C API  
+      |  
+      v  
+C double values  
+      |  
+      v  
+Mathematical calculation  
+      |  
+      v  
+Python Result
+
+# **3\. Average Function**
+
+## **Purpose**
+
+The average() function calculates the arithmetic mean of all sensor readings.
+
+The mathematical formula is:
+
+Average=Sum of valuesNumber of valuesAverage \= \\frac{Sum\\ of\\ values}{Number\\ of\\ values}Average=Number of valuesSum of values​
+
+Example:
+
+Input:
+
+\[20.0, 30.0, 40.0\]
+
+Calculation:
+
+(20 \+ 30 \+ 40\) / 3
+
+Result:
+
+30.0
+
+The function processes every value once.
+
+Time complexity:
+
+O(n)
+
+where n is the number of sensor readings.
+
+# **4\. Range Function**
+
+## **Purpose**
+
+The range\_value() function finds the difference between the highest and lowest sensor readings.
+
+The formula is:
+
+Range=Maximum−MinimumRange \= Maximum \- MinimumRange=Maximum−Minimum
+
+Example:
+
+Input:
+
+\[15.5, 25.0, 40.5\]
+
+Maximum:
+
+40.5
+
+Minimum:
+
+15.5
+
+Result:
+
+25.0
+
+The function checks every element to find the minimum and maximum values.
+
+Time complexity:
+
+O(n)
+
+# **5\. Variance Function**
+
+## **Purpose**
+
+The variance() function calculates the sample variance of the sensor readings.
+
+Variance measures how spread out the values are from the average.
+
+The formula used is:
+
+Variance=∑(x−xˉ)2n−1Variance \= \\frac{\\sum(x-\\bar{x})^2}{n-1}Variance=n−1∑(x−xˉ)2​
+
+Where:
+
+* x represents each sensor value.  
+* x̄ represents the average value.  
+* n represents the number of samples.
+
+Example:
+
+For sensor values:
+
+\[10, 20, 30\]
+
+The function:
+
+1. Calculates the average.  
+2. Calculates the difference between each value and the average.  
+3. Squares the differences.  
+4. Divides by n-1.
+
+The function requires at least two values because sample variance cannot be calculated from one sample.
+
+Time complexity:
+
+O(n)
+
+# **6\. Count Above Function**
+
+## **Purpose**
+
+The count\_above() function counts the number of sensor readings greater than a given limit.
+
+Example:
+
+Input:
+
+data \= \[20, 30, 40, 50\]
+
+limit \= 35
+
+Values above 35:
+
+40, 50
+
+Result:
+
+2
+
+The function checks each value and increases the counter when the condition is true.
+
+Time complexity:
+
+O(n)
+
+# **7\. Statistics Function**
+
+## **Purpose**
+
+The statistics() function returns a Python dictionary containing a summary of the dataset.
+
+The returned dictionary format is:
+
+{  
+    "samples": number\_of\_samples,  
+    "average": average\_value,  
+    "minimum": minimum\_value,  
+    "maximum": maximum\_value  
 }
-```
 
-`PyFloat_AsDouble` returns `-1.0` both for a legitimately negative-one value
-*and* on conversion failure (e.g. the element is a string), so the only way
-to distinguish the two is to check `PyErr_Occurred()` immediately after the
-call. Every loop that pulls an element out of the input sequence checks this
-return value and, on failure, releases the reference it holds and returns
-`NULL` — propagating the `TypeError` Python's own conversion machinery
-already raised, rather than silently treating a bad element as `-1.0`.
+Example:
 
-## Memory Management
+Input:
 
-- **Python → C conversion**: each element is fetched with
-  `PySequence_GetItem` (which returns a new reference) and immediately
-  converted to a C `double` via `as_double()`. The reference is released
-  with `Py_DECREF` right after use, on both the success and failure paths.
-- **No unnecessary dynamic allocation**: every function computes its result
-  from C `double` locals in a single pass (or two passes for `variance`,
-  see above) without ever building an intermediate C array — the input data
-  already lives in the Python list/tuple, so copying it into a second
-  buffer would be pure overhead.
-- **C → Python conversion**: results are returned via `PyFloat_FromDouble`
-  or `PyLong_FromLong`, which each create a new reference that is handed
-  back to the interpreter (ownership transferred to the caller).
-- **`statistics()` dict construction**: `PyDict_SetItemString` does **not**
-  steal the reference to the value being inserted — it increments the
-  refcount itself. So each temporary (`PyLong_FromLong`, `PyFloat_FromDouble`)
-  is stored in a local, inserted into the dict, and then `Py_DECREF`'d
-  immediately, avoiding a reference leak on every call.
+\[20.5, 30.0, 40.5\]
 
-## Numerical Accuracy Considerations
+Output:
 
-- All arithmetic is done in C `double` (IEEE 754 double precision), matching
-  Python's native `float`, so no precision is lost converting between the
-  two.
-- `variance()` uses the two-pass mean-then-deviations method rather than the
-  single-pass "sum of squares minus square of sum" shortcut, because the
-  latter is numerically unstable (subject to catastrophic cancellation) for
-  data with a large mean relative to its spread.
-- `range_value()` and `statistics()` track running min/max with a single
-  comparison per element rather than sorting, avoiding both unnecessary
-  O(n log n) cost and any reordering of the input.
+{  
+"samples": 3,  
+"average": 30.33,  
+"minimum": 20.5,  
+"maximum": 40.5  
+}
+
+The function calculates all values in one pass through the data.
+
+Time complexity:
+
+O(n)
+
+# **8\. Input Validation and Error Handling**
+
+The extension checks that the input data is valid before processing.
+
+The functions only accept:
+
+* Python lists  
+* Python tuples
+
+Invalid example:
+
+sensor\_analysis.average("hello")
+
+The extension raises:
+
+TypeError:  
+Input must be a list or tuple
+
+## **Empty Dataset Handling**
+
+An empty dataset cannot produce meaningful statistical results.
+
+Example:
+
+sensor\_analysis.average(\[\])
+
+The extension raises:
+
+ValueError:  
+Dataset cannot be empty
+
+## **Variance Validation**
+
+Sample variance requires at least two samples.
+
+Example:
+
+sensor\_analysis.variance(\[10\])
+
+The extension raises:
+
+ValueError:  
+Need at least two samples
+
+# **9\. Memory Management**
+
+The extension avoids unnecessary memory allocation.
+
+Instead of copying the Python list into a new C array, the program accesses values directly from the Python object.
+
+This approach has several advantages:
+
+* Uses less memory.  
+* Avoids unnecessary copying.  
+* Improves performance.
+
+When accessing Python objects, the extension manages reference counting.
+
+Example:
+
+Py\_DECREF(item);
+
+This releases temporary objects after they are no longer needed and prevents memory leaks.
+
+# **10\. Numerical Accuracy Considerations**
+
+Sensor data normally contains decimal values, such as:
+
+23.5  
+67.8  
+45.2
+
+Therefore, the extension uses the C data type:
+
+double
+
+instead of integers.
+
+The double type provides enough precision for most sensor calculations and reduces rounding errors during mathematical operations.
+
+# **11\. Building the Extension**
+
+Before building, install the required tools.
+
+## **Install Python development headers:**
+
+sudo apt install python3-dev
+
+Install setuptools:
+
+pip install setuptools
+
+## **Build the Extension**
+
+Navigate to the project directory:
+
+cd sensor\_project
+
+Run:
+
+python3 setup.py build
+
+This compiles the C source file and creates the Python extension module.
+
+The generated file will have a name similar to:
+
+sensor\_analysis.cpython-312-x86\_64-linux-gnu.so
+
+The .so file is the compiled Python extension.
+
+# **12\. Running the Test Program**
+
+Run:
+
+python3 test.py
+
+Example output:
+
+Average: 28.5
+
+Range: 12.3
+
+Variance: 22.6
+
+Above 30: 2
+
+Statistics:
+
+{  
+ 'samples': 5,  
+ 'average': 28.5,  
+ 'minimum': 22.8,  
+ 'maximum': 35.1  
+}
+
+Error: Dataset cannot be empty
+
+# **13\. Execution Flow**
+
+The complete execution process is:
+
+Python Test Program
+
+        |  
+        v
+
+Import sensor\_analysis
+
+        |  
+        v
+
+Python C Extension Module
+
+        |  
+        v
+
+Receive Python List/Tuple
+
+        |  
+        v
+
+Convert Values to C double
+
+        |  
+        v
+
+Perform Calculation in C
+
+        |  
+        v
+
+Create Python Object Result
+
+        |  
+        v
+
+Return Result to Python
+
+# **Conclusion**
+
+This project demonstrates how Python can be extended with C to improve performance in data processing applications. The extension module moves numerical calculations from Python into native C code while maintaining the simplicity of calling functions from Python.
+
+The implementation uses the Python C API to safely exchange data between Python and C, validates input types, handles errors, manages memory correctly, and performs all calculations using efficient C operations.
+
+This approach is especially useful in real-time applications such as smart agriculture systems, where thousands or millions of sensor readings must be processed quickly and efficiently. By combining Python's flexibility with C's performance, developers can build faster and more scalable data-processing systems.
+
