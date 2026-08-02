@@ -270,5 +270,5 @@ this is likely the main function because it controls the overall program flow.
 
 The process of investigating an ELF executable allows to understand how a simple C program becomes a machine-executable file. The compilation process converts source code into machine instructions, while stripping removes information that makes reverse engineering easier. Static analysis tools such as readelf, ldd, and objdump reveal important details about the executable, including its architecture, memory sections, linking method, and internal program logic.
 
-By analysing ELF sections such as *.text, .data, .bss, .plt, and .got,* we can understand how instructions, variables, and external libraries are organized. Finally, using assembly analysis, we can reconstruct the behaviour of the original C program even after symbols and debugging information have been removed. This demonstrates how operating systems load, organize, and execute software at a low level.
+By analysing ELF sections such as *.text, .data, .bss, .plt, and .got,* can understand how instructions, variables, and external libraries are organized. Finally, using assembly analysis, we can reconstruct the behaviour of the original C program even after symbols and debugging information have been removed. This demonstrates how operating systems load, organize, and execute software at a low level.
 
